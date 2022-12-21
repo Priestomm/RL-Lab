@@ -2,6 +2,8 @@ import os, sys
 module_path = os.path.abspath(os.path.join('../tools'))
 if module_path not in sys.path: sys.path.append(module_path)
 from DangerousGridWorld import GridWorld
+import random as rd
+import numpy as np
 
 
 def value_iteration(environment, maxiters=300, discount=0.9, max_error=1e-3):
@@ -21,9 +23,24 @@ def value_iteration(environment, maxiters=300, discount=0.9, max_error=1e-3):
 	U_1 = [0 for _ in range(environment.observation_space)] # vector of utilities for states S
 	delta = 0 # maximum change in the utility o any state in an iteration
 	U = U_1.copy()
-	#
-	# YOUR CODE HERE!
-	#
+
+	for i in range(maxiters):
+		U = U_1.copy()
+		delta = 0
+
+		for s in range(environment.observation_space):
+			actionRews = [0 for _ in range(environment.action_space)]
+			for a in range(environment.action_space):
+				for s_1 in range(environment.observation_space):
+					actionRews[a] += environment.transition_prob(s, a, s_1) * U[s_1]
+			U_1[s] = environment.R[s] + (discount * max(actionRews))
+
+			if (U_1[s] - U[s]) > delta:
+				delta = (U_1[s] - U[s])
+
+		if delta < max_error * (1 - discount) / discount:
+			break
+
 	return environment.values_to_policy( U )
 
 	
@@ -41,22 +58,35 @@ def policy_iteration(environment, maxiters=300, discount=0.9, maxviter=10):
 	Returns:
 		policy: 1-d dimensional array of action identifiers where index `i` corresponds to state id `i`
 	"""
-	
-	p = [0 for _ in range(environment.observation_space)] #initial policy    
+	   
 	U = [0 for _ in range(environment.observation_space)] #utility array
-	
-	# 1) Policy Evaluation
-	#
-	# YOUR CODE HERE!
-	#
+	policy = [rd.randint(0,3) for _ in range(environment.observation_space)]
+	for i in range(maxiters):
+		# 1) Policy Evaluation
+		for s in range(environment.observation_space):
+			summation = 0
+			for s_1 in range(environment.observation_space):
+				summation += environment.transition_prob(s, policy[s], s_1) * U[s_1]
+			U[s] = environment.R[s] + (discount * summation)
+			
+		unchanged = True
 
-	unchanged = True 	 
 	# 2) Policy Improvement
-	#
-	# YOUR CODE HERE!
-	#    
+		for s in range(environment.observation_space):
+			actionRews = [0 for _ in range(environment.action_space)]
+			policyRew = 0
+			for a in range(environment.action_space):
+				for s_1 in range(environment.observation_space):
+					actionRews[a] += environment.transition_prob(s, a, s_1) * U[s_1]
+			for s_1 in range(environment.observation_space):
+				policyRew += environment.transition_prob(s, policy[a], s_1) * U[s_1]
+			if max(actionRews) > policyRew:
+				policy[s] = np.argmax(actionRews)
+				unchanged = False
+		if unchanged:
+			break  
 	
-	return p
+	return policy
 
 
 
