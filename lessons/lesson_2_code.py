@@ -60,15 +60,15 @@ def policy_iteration(environment, maxiters=300, discount=0.9, maxviter=10):
 	"""
 	   
 	U = [0 for _ in range(environment.observation_space)] #utility array
-	policy = [rd.randint(0,3) for _ in range(environment.observation_space)]
+	p = [0 for _ in range(environment.observation_space)]
 	for i in range(maxiters):
 		# 1) Policy Evaluation
 		for s in range(environment.observation_space):
 			summation = 0
 			for s_1 in range(environment.observation_space):
-				summation += environment.transition_prob(s, policy[s], s_1) * U[s_1]
+				summation += environment.transition_prob(s, p[s], s_1) * U[s_1]
 			U[s] = environment.R[s] + (discount * summation)
-			
+
 		unchanged = True
 
 	# 2) Policy Improvement
@@ -79,14 +79,14 @@ def policy_iteration(environment, maxiters=300, discount=0.9, maxviter=10):
 				for s_1 in range(environment.observation_space):
 					actionRews[a] += environment.transition_prob(s, a, s_1) * U[s_1]
 			for s_1 in range(environment.observation_space):
-				policyRew += environment.transition_prob(s, policy[a], s_1) * U[s_1]
+				policyRew += environment.transition_prob(s, p[a], s_1) * U[s_1]
 			if max(actionRews) > policyRew:
-				policy[s] = np.argmax(actionRews)
+				p[s] = np.argmax(actionRews)
 				unchanged = False
 		if unchanged:
 			break  
 	
-	return policy
+	return p
 
 
 
