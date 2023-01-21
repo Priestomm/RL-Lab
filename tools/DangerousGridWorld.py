@@ -3,7 +3,7 @@ import random, numpy
 
 class GridWorld( gym.Env ):
 
-	def __init__( self ):
+	def __init__( self, deterministic=False ):
 
 		#numpy.random.seed(1)
 
@@ -20,6 +20,9 @@ class GridWorld( gym.Env ):
 		self.walls = [8, 9, 16, 21, 23, 30, 36, 37] + [10, 17, 24, 31, 38]
 		self.death = [6, 13, 20, 27, 34, 41] + [11, 18, 25, 32, 39]
 		self.probability = 0.9
+
+		#
+		if deterministic: self.probability = 1
 
 		#
 		self.robot_state = self.start_state
@@ -157,14 +160,14 @@ class GridWorld( gym.Env ):
 		for state in range( self.observation_space ):
 			max_candidate = -numpy.inf
 			max_action = 0
-			for idx, a in enumerate(self.available_action[state]):
-				if a != state and a > max_candidate: 
-					max_candidate = a
-					max_action = idx
-
+			for action, next_state in enumerate(self.available_action[state]):
+				if next_state != state and values[next_state] > max_candidate: 
+					max_candidate = values[next_state]
+					max_action = action
 			policy.append(max_action)
 
 		return policy
+
 
 	
 	def evaluate_policy( self, policy, iteartions=100 ):
