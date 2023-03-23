@@ -7,7 +7,7 @@ import tensorflow as tf; import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from DangerousGridWorld import GridWorld
-
+import numpy as np
 
 def mse( network, dataset_input, target ):
 	"""
@@ -56,7 +56,17 @@ def findMinimum( objective_function, n_iter=5000 ):
 	y = tf.Variable(0.0, name='y')
 	optimizer = tf.keras.optimizers.SGD( learning_rate=0.001 )
 	#
-	# YOUR CODE HERE!
+
+	for _ in range(n_iter):
+
+		with tf.GradientTape() as tape:
+
+			obj = objective(x, y)
+
+			grad = tape.gradient(obj, [x, y])
+
+			optimizer.apply_gradients(zip(grad, [x, y]))
+
 	#
 	return x.numpy(), y.numpy()
 
@@ -78,8 +88,14 @@ def createDNN( nInputs, nOutputs, nLayer, nNodes ):
 	
 	# Initialize the neural network
 	model = Sequential()
+
 	#
-	# YOUR CODE HERE!
+	model.add(Dense(nNodes, input_dim=nInputs, activation="relu"))
+
+	for _ in range(nLayer - 1):
+		model.add(Dense(nNodes, activation="relu"))
+
+	model.add(Dense(nOutputs, activation="linear"))
 	#
 	return model
 
@@ -102,8 +118,20 @@ def collect_random_trajectories( env, num_episodes=10 ):
 
 	for _ in range(num_episodes):
 		state = env.random_initial_state()
+
 		#
-		# YOUR CODE HERE!
+		done = False
+		while done == False:
+
+			action = np.random.randint(3)
+			next_state = env.sample(action, state)
+
+			reward = env.R[next_state]
+			done = env.is_terminal(next_state)
+
+			memory_buffer.append([state, action, next_state, reward, done])
+			state = next_state
+
 		#
 		
 	return np.array(memory_buffer)
@@ -129,10 +157,17 @@ def trainDNN( model, memory_buffer, epoch=20 ):
 	# Preprocess data
 	dataset_input = np.vstack(memory_buffer[:, 2])
 	target = np.vstack(memory_buffer[:, 3])
+	optimizer = tf.keras.optimizers.Adam(lr=0.01)
 
-	#
-	# YOUR CODE HERE!
-	#
+	for _ in range(epoch):
+
+		with tf.GradientTape() as tape:
+
+			objective = mse(model, dataset_input, target)
+			grad = tape.gradient(objective, model.trainable_variables)
+			optimizer.apply_gradients(zip(grad, model.trainable_variables))
+	
+	
 	return model
 
 
