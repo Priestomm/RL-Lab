@@ -73,13 +73,14 @@ def training_loop( env, neural_net, updateRule, eps=1, episodes=100, updates=1 )
 
 	"""
 
-	optimizer = tf.keras.optimizers.Adam(lr=0.01)
+	optimizer = tf.keras.optimizers.Adam(lr=0.001)
 	rewards_list, memory_buffer = [], collections.deque( maxlen=1000 )
 	averaged_rewards = []
 	for ep in range(episodes):
 
 		# reset the environment and obtain the initial state
 		state = env.reset()[0]
+		state = np.reshape(state, (-1,4))
 		ep_reward = 0
 		while True:
 
@@ -88,6 +89,7 @@ def training_loop( env, neural_net, updateRule, eps=1, episodes=100, updates=1 )
 
 			# Perform the action, store the data in the memory buffer and update the reward
 			next_state, reward, terminated, truncated, _ = env.step(action)
+			next_state = np.reshape(next_state, (-1, 4))
 			memory_buffer.append((state, action, next_state, reward, terminated))
 			ep_reward += reward
 
@@ -125,17 +127,16 @@ def DQNUpdate( neural_net, memory_buffer, optimizer, batch_size=32, gamma=0.99 )
 	for idx in indices: 
 
 		# extract data from the buffer 
-		state, action, reward, next_state, done = memory_buffer[idx][0], memory_buffer[idx][1], memory_buffer[idx][3], memory_buffer[idx][2], memory_buffer[idx][4]
+		state, action, next_state, reward, done = memory_buffer[idx]
 		
 		# compute the target for the training
-		print(neural_net.summary())
-		print(state.size)
-		target = neural_net(np.array(state))
+
+		target = neural_net(state).numpy()[0]
 
 		if done == True:
 			target[action] = reward
 		else:
-			max_q = max(neural_net(next_state))
+			max_q = max(neural_net(next_state)).numpy()[0]
 			target[action] = reward + (max_q * gamma)
 
 		# compute the gradient and perform the backpropagation step

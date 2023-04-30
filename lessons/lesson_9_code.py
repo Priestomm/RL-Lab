@@ -8,7 +8,17 @@ import gymnasium, collections
 
 
 def createDNN( nInputs, nOutputs, nLayer, nNodes ): 
-	raise NotImplementedError
+	# Initialize the neural network
+	model = Sequential()
+	#
+	model.add(Dense(nNodes, input_dim=nInputs, activation="relu"))
+
+	for _ in range(nLayer - 1):
+		model.add(Dense(nNodes, activation="relu"))
+
+	model.add(Dense(nOutputs, activation="softmax"))
+	#
+	return model
 
 
 def training_loop( env, neural_net, updateRule, frequency=10, episodes=100 ):
@@ -26,32 +36,41 @@ def training_loop( env, neural_net, updateRule, frequency=10, episodes=100 ):
 
 	"""
 
-	#TODO: initialize the optimizer 
-	optimizer = None 
+	# initialize the optimizer 
+	optimizer = tf.optimizers.Adam()
 	rewards_list, reward_queue = [], collections.deque( maxlen=100 )
-	memory_buffer = []
+	memory_buffer = [[]]
 	for ep in range(episodes):
 
-		#TODO: reset the environment and obtain the initial state
-		state = None 
+		# reset the environment and obtain the initial state
+		state = env.reset()[0]
+		state = np.reshape(state, (-1, 4))
 		ep_reward = 0
 		while True:
 
-			#TODO: select the action to perform
-			action = None 
+			# select the action to perform
+			distribution = neural_net(state).numpy()[0]
+			action = np.random.choice(2, p=distribution)
 
-			#TODO: Perform the action, store the data in the memory buffer and update the reward
-			memory_buffer.append( None )
-			ep_reward += None
 
-			#TODO: exit condition for the episode
-			if False: break
+			# Perform the action, store the data in the memory buffer and update the reward
+			next_state, reward, terminated, truncated, _ = env.step(action)
+			next_state = np.reshape(next_state, (-1, 4))
+			memory_buffer[ep % 10].append((state, action, next_state, reward, terminated))
+			ep_reward += reward
 
-			#TODO: update the current state
-			state = None
+			# exit condition for the episode
+			if ( terminated or truncated ) == True: 
+				break
 
-		#TODO: Perform the actual training every 'frequency' episodes
-		updateRule( neural_net, memory_buffer, optimizer )
+			# update the current state
+			state = next_state
+
+		# Perform the actual training every 'frequency' episodes
+		
+		if ep % frequency == 0:
+			updateRule( neural_net, memory_buffer, optimizer )
+			memory_buffer = [[] for _ in range(10)]
 
 		# Update the reward list to return
 		reward_queue.append( ep_reward )
@@ -70,18 +89,42 @@ def REINFORCE_naive( neural_net, memory_buffer, optimizer ):
 
 	"""
 
-	#TODO: Setup the tape
-		#TODO: Initialize the array for the objectives, one for each episode considered
-		#TODO: Iterate over all the trajectories considered
-			#TODO: Extract the information from the buffer (for the considered episode)
-			#TODO: Compute the log-prob of the current trajectory
-			#TODO: Implement the update rule, notice that the REINFORCE objective 
+	# Setup the tape
+	with tf.GradientTape() as tape:
+		# Initialize the array for the objectives, one for each episode considered
+		objectives = []
+		# Iterate over all the trajectories considered
+		for traj in memory_buffer:
+			states = []
+			actions = []
+			rewards = []
+			probabilities = []
+			# Extract the information from the buffer (for the considered episode)
+			for step in traj:
+				states.append(step[0])
+				actions.append(step[1])
+				rewards.append(step[3])
+
+			# Compute the log-prob of the current trajectory
+	
+			for step in traj:
+				probability = neural_net(step[0])[0][step[1]]
+				probabilities.append(probability)
+
+			#log_probs = tf.math.log(probabilities)
+			log_prob_sum = tf.math.reduce_sum(tf.math.log(probabilities))
+			objectives.append(log_prob_sum * sum(rewards))
+
+			# Implement the update rule, notice that the REINFORCE objective 
 			# is the sum of the logprob (i.e., the probability of the trajectory)
 			# multiplied by the sum of the reward
+		objective = -tf.math.reduce_mean(objectives)
+		grads = tape.gradient(objective, neural_net.trainable_variables)
+		optimizer.apply_gradients(zip(grads, neural_net.trainable_variables))
 
-		#TODO: Compute the final final objective to optimize
+		# Compute the final final objective to optimize
 
-	raise NotImplemented
+
 
 
 def REINFORCE_rw2go( neural_net, memory_buffer, optimizer ):
@@ -89,8 +132,42 @@ def REINFORCE_rw2go( neural_net, memory_buffer, optimizer ):
 	Main update rule for the REINFORCE process, with the addition of the reward-to-go trick,
 
 	"""
+	with tf.GradientTape() as tape:
+		# Initialize the array for the objectives, one for each episode considered
+		objectives = []
+		
+		# Iterate over all the trajectories considered
+		for traj in memory_buffer:
+			probabilities = []
+			states = []
+			actions = []
+			rewards = []
+			reward_per_episode = np.zeros(len(traj))
 
-	raise NotImplementedError
+			# Extract the information from the buffer (for the considered episode)
+			for i, step in enumerate(traj):
+				states.append(step[0])
+				actions.append(step[1])
+				rewards.append(step[3])
+
+			# Compute the log-prob of the current trajectory
+			reward_per_episode = np.flip(np.cumsum(rewards))
+
+			for i, step in enumerate(traj):
+				probability = neural_net(step[0])[0][step[1]]
+				probabilities.append(tf.math.log(probability))
+				probabilities[-1] *= reward_per_episode[i]
+
+			log_prob_sum = tf.math.reduce_sum(probabilities)
+			objectives.append(log_prob_sum)
+
+			# Implement the update rule, notice that the REINFORCE objective 
+			# is the sum of the logprob (i.e., the probability of the trajectory)
+			# multiplied by the sum of the reward
+		objective = -tf.math.reduce_mean(objectives)
+		grads = tape.gradient(objective, neural_net.trainable_variables)
+		optimizer.apply_gradients(zip(grads, neural_net.trainable_variables))
+
 
 
 def main():

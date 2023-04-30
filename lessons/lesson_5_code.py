@@ -39,9 +39,30 @@ def dynaQ( environment, maxiters=250, n=10, eps=0.3, alfa=0.3, gamma=0.99 ):
 
 	Q = numpy.zeros((environment.observation_space, environment.action_space))
 	M = numpy.array([[[None, None] for _ in range(environment.action_space)] for _ in range(environment.observation_space)])
-	#
-	# YOUR CODE HERE!
-	#
+
+	explored = []
+	for _ in range(maxiters):
+		S = environment.random_initial_state()
+		A = epsilon_greedy(Q, S, eps)
+		S_1 = environment.sample(A, S)
+		R = environment.R[S_1]
+		values = [0 for _ in range(environment.action_space)]
+		
+		for action in environment.actions:
+			values[action] = Q[S_1][action]
+		Q[S][A] = Q[S][A] + alfa * (R + gamma * max(values) - Q[S][A])
+		M[S][A] = [R, S_1]
+		explored.append((S, A))
+		explored = list(set(explored))
+		
+		for _ in range(n):
+			idx = numpy.random.choice(len(explored))
+			S, A = explored[idx]
+			R, S_1 = M[S][A]
+			for action in environment.actions:
+				values[action] = Q[S_1][action]
+			Q[S][A] = Q[S][A] + alfa * (R + gamma * max(values) - Q[S][A])
+
 	policy = Q.argmax(axis=1) 
 	return policy
 

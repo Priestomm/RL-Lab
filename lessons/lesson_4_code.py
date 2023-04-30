@@ -58,7 +58,26 @@ def q_learning(environment, episodes, alpha, gamma, expl_func, expl_param):
 	rews = numpy.zeros(episodes)
 	lengths = numpy.zeros(episodes)
 	#
-	# YOUR CODE HERE!
+	for episode in range(episodes):
+		state = environment.start_state
+		print(episode)
+		while True:
+			action = expl_func(q, state, expl_param)
+			new_state = environment.sample(action, state)
+			reward = environment.R[new_state]
+			rews[episode] += reward
+			lengths[episode] += 1
+			val = [0 for _ in environment.actions]
+			for action in environment.actions:
+				val[action] = q[new_state, action]
+				
+			q[state, action] = q[state, action] + alpha * (reward + gamma * max(val) - q[state, action])
+			
+			state = new_state
+			if environment.is_terminal(state):
+				break
+			
+
 	#
 	policy = q.argmax(axis=1) # q.argmax(axis=1) automatically extract the policy from the q table
 	return policy, rews, lengths
