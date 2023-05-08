@@ -29,7 +29,7 @@ def training_loop( env, actor_net, critic_net, updateRule, frequency=10, episode
     actor_optimizer = tf.optimizers.Adam()
 
     rewards_list, reward_queue = [], collections.deque( maxlen=100 )
-    memory_buffer = [[]]
+    memory_buffer = []
     for ep in range(episodes):
 
         # reset the environment and obtain the initial state
@@ -46,7 +46,7 @@ def training_loop( env, actor_net, critic_net, updateRule, frequency=10, episode
             # Perform the action, store the data in the memory buffer and update the reward
             next_state, reward, terminated, truncated, _ = env.step(action)
             next_state = np.reshape(next_state, (-1, 4))
-            memory_buffer[(ep % frequency) - 1].append((state, action, next_state, reward, terminated))
+            memory_buffer.append((state, action, next_state, reward, terminated))
             ep_reward += reward
 
             # exit condition for the episode
@@ -60,7 +60,7 @@ def training_loop( env, actor_net, critic_net, updateRule, frequency=10, episode
 
         if ep % frequency == 0:
             updateRule( actor_net, critic_net, memory_buffer, actor_optimizer, critic_optimizer )
-            memory_buffer = [[] for _ in range(frequency)]
+            memory_buffer = []
 
         # Update the reward list to return
         reward_queue.append( ep_reward )
@@ -84,22 +84,23 @@ def A2C( actor_net, critic_net, memory_buffer, actor_optimizer, critic_optimizer
     for _ in range(10):
         # Shuffle the memory buffer
         np.random.shuffle( memory_buffer )
-        #TODO: extract the information from the buffer
-        for step in memory_buffer[0]:
-            state, action, next_state, reward, terminated = step
-            done = 1 if terminated else 0
+        memory_buffer = np.asarray(memory_buffer)
+        states = np.vstack(memory_buffer[:,0])
+        next_states = np.vstack(memory_buffer[:,2])
+        rewards = np.vstack(memory_buffer[:,3])
+        dones = np.vstack(memory_buffer[:,4])
 
-            # Tape for the critic
-            with tf.GradientTape() as critic_tape:
-                #TODO: Compute the target and the MSE between the current prediction
-                # and the expected advantage    
-                target = reward + (1 - done) * gamma * critic_net(next_state) 
-                prediction = critic_net(state)
-                mse = tf.math.square(prediction - target)
+        # Tape for the critic
+        with tf.GradientTape() as critic_tape:
+            #TODO: Compute the target and the MSE between the current prediction
+            # and the expected advantage    
+            target = rewards + (1 - dones.astype(int)) * gamma * critic_net(next_states) 
+            prediction = critic_net(states)
+            mse = tf.math.square(prediction - target)
 
-                #TODO: Perform the actual gradient-descent process
-                grad = critic_tape.gradient(mse, critic_net.trainable_variables)   
-                critic_optimizer.apply_gradients( zip(grad, critic_net.trainable_variables) ) 
+            #TODO: Perform the actual gradient-descent process
+            grad = critic_tape.gradient(mse, critic_net.trainable_variables)   
+            critic_optimizer.apply_gradients( zip(grad, critic_net.trainable_variables) ) 
 
 
     #TODO: implement the update rule for the actor (policy function)
@@ -112,18 +113,12 @@ def A2C( actor_net, critic_net, memory_buffer, actor_optimizer, critic_optimizer
     # multiplied by advantage
         objectives = []
 		
-        for traj in memory_buffer:
-		# Iterate over all the trajectories considered
-        # Extract the information from the buffer (for the considered episode)
-            objective = 0
-            for step in traj:
-                probability = actor_net(step[0])[0][step[1]]
-                log_prob = tf.math.log(probability)
-                adv_a = step[3] + gamma * critic_net(step[2]).numpy().reshape(-1)
-                adv_b = critic_net(step[0]).numpy().reshape(-1)
-                objective += log_prob * (adv_a - adv_b)
-
-            objectives.append(objective)
+        for step in memory_buffer:
+            probability = actor_net(step[0])[0][step[1]]
+            log_prob = tf.math.log(probability)
+            adv_a = step[3] + gamma * critic_net(step[2]).numpy().reshape(-1)
+            adv_b = critic_net(step[0]).numpy().reshape(-1)
+            objectives.append(log_prob * (adv_a - adv_b))
 
         # Implement the update rule, notice that the REINFORCE objective 
         # is the sum of the logprob (i.e., the probability of the trajectory)
