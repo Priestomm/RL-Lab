@@ -50,7 +50,8 @@ def training_loop( env, actor_net, critic_net, updateRule, frequency=10, episode
             ep_reward += reward
 
             # exit condition for the episode
-            if ( terminated or truncated ) == True: 
+            if ( terminated or truncated ) == True:
+                
                 break
 
             # update the current state
@@ -106,25 +107,30 @@ def A2C( actor_net, critic_net, memory_buffer, actor_optimizer, critic_optimizer
     #TODO: implement the update rule for the actor (policy function)
     #TODO: extract the information from the buffer for the policy update
     # Tape for the actor
+    objectives = []
     with tf.GradientTape() as actor_tape:
     #TODO: compute the log-prob of the current trajectory and 
     # the objective function, notice that:
     # the REINFORCE objective is the sum of the logprob (i.e., the probability of the trajectory)
     # multiplied by advantage
-        objectives = []
-		
-        for step in memory_buffer:
-            probability = actor_net(step[0])[0][step[1]]
-            log_prob = tf.math.log(probability)
-            adv_a = step[3] + gamma * critic_net(step[2]).numpy().reshape(-1)
-            adv_b = critic_net(step[0]).numpy().reshape(-1)
-            objectives.append(log_prob * (adv_a - adv_b))
+        actions = np.array(list(memory_buffer[:, 1]), dtype=int)
+
+
+        probabilities = actor_net(states)
+        indices = tf.transpose(tf.stack([tf.range(probabilities.shape[0]),actions]))
+        probs = tf.gather_nd(
+            indices=indices,
+            params=probabilities
+        )
+        log_probs = tf.math.log(probs)
+        adv_a = rewards + gamma * critic_net(next_states).numpy().reshape(-1)
+        adv_b = critic_net(states).numpy().reshape(-1)
+        objective = log_probs * (adv_a - adv_b)
 
         # Implement the update rule, notice that the REINFORCE objective 
         # is the sum of the logprob (i.e., the probability of the trajectory)
         # multiplied by the sum of the reward
-        objective = -tf.math.reduce_mean(objectives)
-        grads = actor_tape.gradient(objective, actor_net.trainable_variables)
+        grads = actor_tape.gradient(-tf.math.reduce_sum(objective), actor_net.trainable_variables)
         actor_optimizer.apply_gradients(zip(grads, actor_net.trainable_variables))
 #TODO: compute the final objective to optimize, is the average between all the considered trajectories
 
